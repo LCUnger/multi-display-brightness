@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")/.."
+node tests/ddc.test.mjs
+gjs -m tests/process.test.js
+glib-compile-schemas --strict --dry-run extension/schemas
