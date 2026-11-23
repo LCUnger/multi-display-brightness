@@ -7,7 +7,7 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {Slider} from 'resource:///org/gnome/shell/ui/slider.js';
 
-import {DdcQueue, monitors, targets} from './ddc.js';
+import {DdcQueue, targets} from './ddc.js';
 import {DdcProcess} from './process.js';
 
 export default class LinkedBrightness extends Extension {
@@ -16,7 +16,8 @@ export default class LinkedBrightness extends Extension {
         this.rows = new Map();
         this.preview = null;
         this.commitTimer = 0;
-        this.dragging = false;
+        this.ignoredSlider = null;
+        this.dragSlider = null;
         this.syncing = false;
         this.scale = null;
         this.scaleSignal = 0;
@@ -27,8 +28,10 @@ export default class LinkedBrightness extends Extension {
             style_class: 'system-status-icon',
         }));
         this.addRow('laptop', 'Laptop');
-        for (const {id, label} of monitors)
-            this.addRow(id, label);
+        this.externalSection = new PopupMenu.PopupMenuSection();
+        this.button.menu.addMenuItem(this.externalSection);
+        this.scanStatus = new PopupMenu.PopupMenuItem('', {reactive: false, can_focus: false});
+        this.button.menu.addMenuItem(this.scanStatus);
 
         const link = new PopupMenu.PopupSwitchMenuItem(
             'Link brightness', this.settings.get_boolean('linked'));
@@ -37,7 +40,7 @@ export default class LinkedBrightness extends Extension {
             this.settings.set_boolean('linked', linked);
         });
         this.button.menu.addMenuItem(link);
-        this.button.menu.addAction('Refresh displays', () => this.queue.refresh());
+        this.button.menu.addAction('Refresh displays', () => this.refreshDisplays());
 
         this.process = new DdcProcess();
         const process = this.process;
@@ -49,7 +52,22 @@ export default class LinkedBrightness extends Extension {
                 throw new Error('Extension disabled');
             return process.run(args);
         }, (id, result, pending) => {
+            if (!result) {
+                const row = this.rows.get(id);
+                this.rows.delete(id);
+                if (row?.slider === this.ignoredSlider)
+                    this.ignoredSlider = null;
+                row?.heading.destroy();
+                row?.item.destroy();
+                row?.statusItem.destroy();
+                return;
+            }
+
+            if (!this.rows.has(id))
+                this.addRow(id, result.label, this.externalSection);
             const row = this.rows.get(id);
+            row.heading.label.text = result.label;
+            row.slider.accessible_name = `${result.label} brightness`;
             Object.assign(row, {
                 available: result.max !== null,
                 percent: result.max === null ? null : 100 * result.raw / result.max,
@@ -57,24 +75,32 @@ export default class LinkedBrightness extends Extension {
                 status: result.status,
             });
             this.render();
+        }, status => {
+            this.scanStatus.label.text = status;
+            this.scanStatus.visible = Boolean(status);
         });
 
         this.manager = Main.brightnessManager;
         this.managerSignal = this.manager.connect('changed', () => {
-            this.abortPreview();
             this.bindLaptop();
-            this.queue.refresh(true);
+            this.refreshDisplays();
         });
         this.bindLaptop();
         Main.panel.addToStatusArea(this.uuid, this.button);
-        this.queue.refresh();
+        this.refreshDisplays();
     }
 
-    addRow(id, label) {
+    refreshDisplays() {
+        this.abortPreview();
+        this.queue.refresh();
+        this.render();
+    }
+
+    addRow(id, label, section = this.button.menu) {
         const heading = new PopupMenu.PopupMenuItem(label, {reactive: false});
         const value = new St.Label({text: '—', style_class: 'linked-brightness-value'});
         heading.add_child(value);
-        this.button.menu.addMenuItem(heading);
+        section.addMenuItem(heading);
 
         const item = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
         const slider = new Slider(0);
@@ -84,28 +110,37 @@ export default class LinkedBrightness extends Extension {
             x_expand: true,
             style_class: 'slider-bin',
         }));
-        this.button.menu.addMenuItem(item);
+        section.addMenuItem(item);
 
         const status = new PopupMenu.PopupMenuItem('', {
             reactive: false,
             style_class: 'linked-brightness-status',
         });
-        this.button.menu.addMenuItem(status);
+        section.addMenuItem(status);
 
         slider.connect('drag-begin', () => {
             this.commit();
-            this.dragging = true;
+            this.dragSlider = slider;
+            if (this.ignoredSlider === slider)
+                this.ignoredSlider = null;
         });
         slider.connect('drag-end', () => {
-            this.dragging = false;
-            this.commit();
+            if (this.ignoredSlider === slider) {
+                this.ignoredSlider = null;
+                this.render();
+                return;
+            }
+            if (this.dragSlider === slider) {
+                this.dragSlider = null;
+                this.commit();
+            }
         });
         slider.connect('notify::value', () => {
-            if (!this.syncing && this.rows.get(id).available)
+            if (!this.syncing && this.ignoredSlider !== slider && this.rows.get(id)?.available)
                 this.previewChange(id, slider.value);
         });
         this.rows.set(id, {
-            slider, value, statusItem: status, available: false,
+            heading, item, slider, value, statusItem: status, available: false,
             percent: null, pending: null, status: 'Detecting…',
         });
     }
@@ -145,7 +180,7 @@ export default class LinkedBrightness extends Extension {
             ids: targets(id, this.settings.get_boolean('linked'), available),
         };
         this.render();
-        if (!this.dragging) {
+        if (!this.dragSlider) {
             this.clearCommitTimer();
             this.commitTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 200, () => {
                 this.commitTimer = 0;
@@ -164,7 +199,9 @@ export default class LinkedBrightness extends Extension {
     abortPreview() {
         this.clearCommitTimer();
         this.preview = null;
-        this.dragging = false;
+        if (this.dragSlider)
+            this.ignoredSlider = this.dragSlider;
+        this.dragSlider = null;
     }
 
     commit() {
@@ -175,7 +212,7 @@ export default class LinkedBrightness extends Extension {
         this.preview = null;
         for (const id of change.ids) {
             const row = this.rows.get(id);
-            if (!row.available)
+            if (!row?.available)
                 continue;
             if (id === 'laptop') {
                 this.scale.value = change.percent / 100;

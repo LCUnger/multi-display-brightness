@@ -1,21 +1,51 @@
-export const monitors = [
-    {id: 'iiyama', label: 'Iiyama', model: 'PL2776HD', serial: '1112213801965'},
-    {id: 'dell', label: 'Dell', model: 'Dell S2417DG', serial: '#ASPTvn2EJrrd'},
-];
+function countBy(items, key) {
+    const counts = new Map();
+    for (const item of items)
+        counts.set(item[key], (counts.get(item[key]) ?? 0) + 1);
+    return counts;
+}
 
-export function parseDisplays(output) {
-    const buses = new Map();
-    for (const block of output.split(/^(?=Display\s+\d+\s*$|Invalid display\s*$)/m)) {
-        if (!/^Display\s+\d+\s*$/m.test(block))
+export function parseDisplays(output, generation = 0) {
+    const byBus = new Map();
+    const blocks = output.split(/^(?=(?:Display[ \t]+\d+|Invalid display|Phantom display)\b)/mi);
+    for (const block of blocks) {
+        if (!/^Display[ \t]+\d+[ \t]*\r?$/m.test(block))
             continue;
-        const bus = block.match(/^\s*I2C bus:\s*\/dev\/i2c-(\d+)\s*$/m)?.[1];
-        const model = block.match(/^[ \t]*Model:[ \t]*(.+)$/m)?.[1].trim();
-        const serial = block.match(/^[ \t]*Serial number:[ \t]*(.+)$/m)?.[1].trim();
-        const monitor = monitors.find(item => item.model === model && item.serial === serial);
-        if (monitor && bus)
-            buses.set(monitor.id, bus);
+
+        const fields = new Map();
+        for (const [, key, value] of block.matchAll(/^[ \t]*([^:\r\n]+):([^\r\n]*)/gm))
+            fields.set(key.trim(), value.trim());
+
+        const bus = fields.get('I2C bus')?.match(/^\/dev\/i2c-(\d+)$/)?.[1];
+        const connector = fields.get('DRM_connector') || '';
+        if (!bus || /(?:^|-)(?:eDP|LVDS|DSI)(?:-|$)/i.test(connector))
+            continue;
+
+        const manufacturer = fields.get('Mfg id')?.split(' - ', 1)[0] || '';
+        const model = fields.get('Model') || '';
+        const serial = fields.get('Serial number') || '';
+        const usableSerial = serial && !/^(?:0+|n\/a|none|unknown|unspecified)$/i.test(serial);
+        const edid = usableSerial ? JSON.stringify([manufacturer, model, serial]) : null;
+        byBus.set(bus, {bus, connector, edid, label: model || 'External display'});
     }
-    return buses;
+
+    const displays = [...byBus.values()];
+    const edidCounts = countBy(displays, 'edid');
+    const connectorCounts = countBy(displays, 'connector');
+    const labelCounts = countBy(displays, 'label');
+
+    return new Map(displays.map(({bus, connector, edid, label}) => {
+        const uniqueConnector = connector && connectorCounts.get(connector) === 1;
+        let id = `bus:${generation}:${bus}`;
+        if (edid && edidCounts.get(edid) === 1)
+            id = `edid:${edid}`;
+        else if (uniqueConnector)
+            id = `connector:${connector}`;
+
+        if (labelCounts.get(label) > 1)
+            label += uniqueConnector ? ` (${connector})` : ` (I²C ${bus})`;
+        return [id, {bus, label}];
+    }));
 }
 
 export function parseBrightness(output) {
@@ -32,12 +62,11 @@ export function targets(source, linked, available) {
 }
 
 export class DdcQueue {
-    constructor(run, onChange) {
+    constructor(run, onChange, onScanStatus = () => {}) {
         this.run = run;
         this.onChange = onChange;
-        this.rows = new Map(monitors.map(({id}) => [
-            id, {bus: null, raw: null, max: null, status: 'Detecting…'},
-        ]));
+        this.onScanStatus = onScanStatus;
+        this.rows = new Map();
         this.writes = new Map();
         this.reads = new Set();
         this.generation = 0;
@@ -46,18 +75,18 @@ export class DdcQueue {
         this.stopped = false;
     }
 
-    refresh(topologyChanged = false) {
+    refresh() {
         if (this.stopped)
             return;
-        if (topologyChanged) {
-            this.generation++;
-            this.writes.clear();
-            for (const [id, row] of this.rows) {
-                Object.assign(row, {bus: null, raw: null, max: null, status: 'Detecting…'});
-                this.publish(id);
-            }
-        }
+        this.generation++;
+        this.writes.clear();
+        this.reads.clear();
         this.scanPending = true;
+        this.onScanStatus('Detecting external displays…');
+        for (const [id, row] of this.rows) {
+            Object.assign(row, {bus: null, raw: null, max: null, status: 'Detecting…'});
+            this.publish(id);
+        }
         return this.start();
     }
 
@@ -89,7 +118,6 @@ export class DdcQueue {
             while (!this.stopped) {
                 if (this.scanPending) {
                     this.scanPending = false;
-                    this.reads.clear();
                     await this.scan();
                 } else if (this.writes.size) {
                     const [id, percent] = this.writes.entries().next().value;
@@ -114,26 +142,34 @@ export class DdcQueue {
 
     async scan() {
         const generation = this.generation;
-        let buses = new Map();
-        let error;
+        let displays;
         try {
-            buses = parseDisplays(await this.run(['detect']));
-        } catch (failure) {
-            error = failure.message;
+            displays = parseDisplays(await this.run(['detect']), generation);
+        } catch (error) {
+            if (!this.isCurrent(generation))
+                return;
+            this.onScanStatus(error.message);
+            for (const [id, row] of this.rows) {
+                row.status = 'Unavailable';
+                this.publish(id);
+            }
+            return;
         }
         if (!this.isCurrent(generation))
             return;
-        for (const [id, row] of this.rows) {
-            const bus = buses.get(id) ?? null;
-            if (bus !== row.bus) {
-                this.writes.delete(id);
-                Object.assign(row, {bus, raw: null, max: null});
+
+        for (const id of this.rows.keys()) {
+            if (!displays.has(id)) {
+                this.rows.delete(id);
+                this.onChange(id, null);
             }
-            row.status = error ?? (!bus ? 'Monitor not detected' : row.max === null ? 'Reading brightness…' : '');
-            if (bus)
-                this.reads.add(id);
+        }
+        for (const [id, {bus, label}] of displays) {
+            this.rows.set(id, {bus, label, raw: null, max: null, status: 'Reading brightness…'});
+            this.reads.add(id);
             this.publish(id);
         }
+        this.onScanStatus(displays.size ? '' : 'No external displays detected');
     }
 
     async readBrightness(id) {

@@ -2,7 +2,7 @@
 
 A GNOME Shell 50 extension that puts laptop and external-monitor brightness in one top-bar menu. **Link brightness** applies the same percentage to every available screen when you adjust any slider. The toggle defaults to off and remembers its state across sessions.
 
-This build targets the Iiyama PL2776HD and Dell S2417DG from the original HP USB-C dock setup. To use other external monitors, update the `monitors` list in [extension/ddc.js](extension/ddc.js) with the model and serial from `ddcutil detect`, then rebuild.
+External monitors are discovered automatically at startup, when GNOME reports a display change, and when you select **Refresh displays**. A monitor needs to answer the DDC/CI brightness query over its current cable or dock. If a detected monitor cannot report brightness, its row shows an error and the other controls stay usable.
 
 ## Build and install
 
@@ -30,13 +30,13 @@ Look for **State: ACTIVE** and open the sun icon in the top bar. Use **Refresh d
 
 ## Develop and test
 
-Run `./scripts/test` with Node.js 22 or newer, GJS, and `glib-compile-schemas`. The tests cover EDID matching, brightness scaling, queued writes, dock bus changes, and subprocess timeout and cancellation.
+Run `./scripts/test` with Node.js 22 or newer, GJS, and `glib-compile-schemas`. The tests cover monitor discovery and identification, brightness scaling, queued writes, dock reconnection, and subprocess timeout and cancellation.
 
 - [extension/extension.js](extension/extension.js) provides the GNOME menu and binds the laptop backlight.
 - [extension/ddc.js](extension/ddc.js) parses DDC output and serializes external monitor reads and writes.
 - [extension/process.js](extension/process.js) runs `ddcutil` asynchronously with a 15-second timeout.
 
-For a hardware check, confirm that each slider controls the correct screen independently and that all three reach 50% in linked mode. Reconnect the dock and confirm that both external sliders recover. The automated tests use simulated monitor queries. A live test requires a GNOME session with access to the I²C devices.
+For a hardware check, confirm that each slider controls the correct screen independently and that all available screens reach 50% in linked mode. Reconnect the dock and confirm that both external sliders recover. The automated tests use simulated monitor queries. A live test requires a GNOME session with access to the I²C devices.
 
 ## Uninstall
 

@@ -1,8 +1,8 @@
 {
   "uuid": "linked-brightness@local",
   "name": "Linked Brightness",
-  "description": "One brightness menu for the laptop, Iiyama PL2776HD, and Dell S2417DG.",
+  "description": "One brightness menu for the laptop and automatically discovered DDC/CI monitors.",
   "shell-version": ["50"],
   "settings-schema": "org.gnome.shell.extensions.linked-brightness",
-  "version": 1
+  "version": 2
 }
