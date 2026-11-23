@@ -1,8 +1,8 @@
 {
-  "uuid": "linked-brightness@local",
-  "name": "Linked Brightness",
+  "uuid": "multi-display-brightness@lcunger.github.io",
+  "name": "Multi-Display Brightness",
   "description": "One brightness menu for the laptop and automatically discovered DDC/CI monitors.",
   "shell-version": ["50"],
-  "settings-schema": "org.gnome.shell.extensions.linked-brightness",
+  "settings-schema": "org.gnome.shell.extensions.multi-display-brightness",
   "version": 2
 }

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist>
-  <schema id="org.gnome.shell.extensions.linked-brightness" path="/org/gnome/shell/extensions/linked-brightness/">
+  <schema id="org.gnome.shell.extensions.multi-display-brightness" path="/org/gnome/shell/extensions/multi-display-brightness/">
     <key name="linked" type="b">
       <default>false</default>
       <summary>Link display brightness</summary>

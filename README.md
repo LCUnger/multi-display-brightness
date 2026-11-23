@@ -1,4 +1,4 @@
-# Linked Brightness
+# Multi-Display Brightness
 
 A GNOME Shell 50 extension that puts laptop and external-monitor brightness in one top-bar menu. **Link brightness** applies the same percentage to every available screen when you adjust any slider. The toggle defaults to off and remembers its state across sessions.
 
@@ -10,7 +10,7 @@ You need `ddcutil` and the `gnome-extensions` CLI. From the repository root, run
 
 ```bash
 ./scripts/build
-gnome-extensions install --force ./dist/linked-brightness@local.shell-extension.zip
+gnome-extensions install --force ./dist/multi-display-brightness@lcunger.github.io.shell-extension.zip
 ```
 
 Disable any other DDC brightness extension before testing. For **Brightness control using ddcutil**, run:
@@ -19,11 +19,11 @@ Disable any other DDC brightness extension before testing. For **Brightness cont
 gnome-extensions disable display-brightness-ddcutil@themightydeity.github.com
 ```
 
-Log out and back in, then enable Linked Brightness.
+Log out and back in, then enable Multi-Display Brightness.
 
 ```bash
-gnome-extensions enable linked-brightness@local
-gnome-extensions info linked-brightness@local
+gnome-extensions enable multi-display-brightness@lcunger.github.io
+gnome-extensions info multi-display-brightness@lcunger.github.io
 ```
 
 Look for **State: ACTIVE** and open the sun icon in the top bar. Use **Refresh displays** to retry detection. Dragging a slider applies the value when you release it. Keyboard and scroll changes apply after 200 ms without input.
@@ -41,8 +41,8 @@ For a hardware check, confirm that each slider controls the correct screen indep
 ## Uninstall
 
 ```bash
-gnome-extensions disable linked-brightness@local
-gnome-extensions uninstall linked-brightness@local
+gnome-extensions disable multi-display-brightness@lcunger.github.io
+gnome-extensions uninstall multi-display-brightness@lcunger.github.io
 ```
 
 If you disabled the previous extension during installation, re-enable it with `gnome-extensions enable display-brightness-ddcutil@themightydeity.github.com`.

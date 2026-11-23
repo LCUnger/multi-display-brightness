@@ -10,7 +10,7 @@ import {Slider} from 'resource:///org/gnome/shell/ui/slider.js';
 import {DdcQueue, targets} from './ddc.js';
 import {DdcProcess} from './process.js';
 
-export default class LinkedBrightness extends Extension {
+export default class MultiDisplayBrightness extends Extension {
     enable() {
         this.settings = this.getSettings();
         this.rows = new Map();
@@ -22,7 +22,7 @@ export default class LinkedBrightness extends Extension {
         this.scale = null;
         this.scaleSignal = 0;
 
-        this.button = new PanelMenu.Button(0.0, 'Linked Brightness');
+        this.button = new PanelMenu.Button(0.0, 'Multi-Display Brightness');
         this.button.add_child(new St.Icon({
             icon_name: 'display-brightness-symbolic',
             style_class: 'system-status-icon',
@@ -98,7 +98,7 @@ export default class LinkedBrightness extends Extension {
 
     addRow(id, label, section = this.button.menu) {
         const heading = new PopupMenu.PopupMenuItem(label, {reactive: false});
-        const value = new St.Label({text: '—', style_class: 'linked-brightness-value'});
+        const value = new St.Label({text: '—', style_class: 'multi-display-brightness-value'});
         heading.add_child(value);
         section.addMenuItem(heading);
 
@@ -114,7 +114,7 @@ export default class LinkedBrightness extends Extension {
 
         const status = new PopupMenu.PopupMenuItem('', {
             reactive: false,
-            style_class: 'linked-brightness-status',
+            style_class: 'multi-display-brightness-status',
         });
         section.addMenuItem(status);
 

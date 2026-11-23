@@ -1,4 +1,4 @@
-# Linked Brightness
+# Multi-Display Brightness
 
 This repository builds a GNOME Shell 50 extension. Source and the settings schema are in `extension/`. Keep user instructions in `README.md` aligned with the build.
 
