@@ -58,6 +58,7 @@ export default class MultiDisplayBrightness extends Extension {
                 this.rows.delete(id);
                 if (row?.slider === this.ignoredSlider)
                     this.ignoredSlider = null;
+                row?.slider.disconnectObject(row.item);
                 row?.heading.destroy();
                 row?.item.destroy();
                 row?.statusItem.destroy();
@@ -119,13 +120,12 @@ export default class MultiDisplayBrightness extends Extension {
         });
         section.addMenuItem(status);
 
-        slider.connect('drag-begin', () => {
+        slider.connectObject('drag-begin', () => {
             this.commit();
             this.dragSlider = slider;
             if (this.ignoredSlider === slider)
                 this.ignoredSlider = null;
-        });
-        slider.connect('drag-end', () => {
+        }, 'drag-end', () => {
             if (this.ignoredSlider === slider) {
                 this.ignoredSlider = null;
                 this.render();
@@ -135,11 +135,10 @@ export default class MultiDisplayBrightness extends Extension {
                 this.dragSlider = null;
                 this.commit();
             }
-        });
-        slider.connect('notify::value', () => {
+        }, 'notify::value', () => {
             if (!this.syncing && this.ignoredSlider !== slider && this.rows.get(id)?.available)
                 this.previewChange(id, slider.value);
-        });
+        }, item);
         this.rows.set(id, {
             heading, item, slider, value, statusItem: status, available: false,
             percent: null, pending: null, status: 'Detecting…',
@@ -257,8 +256,14 @@ export default class MultiDisplayBrightness extends Extension {
         this.queue.stop();
         this.previousQueue = this.queue.running?.catch(logError) ?? null;
         this.process.cancel();
+        for (const {slider, item} of this.rows.values())
+            slider.disconnectObject(item);
+        // The panel button destroys its menu and all of its items.
         this.button.destroy();
         this.button = null;
+        this.externalSection = null;
+        this.scanStatus = null;
+        this.ignoredSlider = null;
         this.queue = null;
         this.process = null;
         this.settings = null;
