@@ -4,5 +4,5 @@
   "description": "One brightness menu for the laptop and automatically discovered DDC/CI monitors.",
   "shell-version": ["50"],
   "settings-schema": "org.gnome.shell.extensions.multi-display-brightness",
-  "version": 2
+  "url": "https://github.com/LCUnger/multi-display-brightness"
 }
