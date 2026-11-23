@@ -2,4 +2,4 @@
 set -eu
 cd "$(dirname "$0")/.."
 mkdir -p dist
-gnome-extensions pack --force --extra-source=ddc.js --extra-source=process.js --out-dir="$PWD/dist" extension
+gnome-extensions pack --force --extra-source=ddc.js --extra-source=process.js --extra-source=../LICENSE --out-dir="$PWD/dist" extension

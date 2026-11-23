@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 function countBy(items, key) {
     const counts = new Map();
     for (const item of items)
